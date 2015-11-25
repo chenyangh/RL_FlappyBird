@@ -145,13 +145,13 @@ def mainGame(movementInfo):
 
     # list of upper pipes
     upperPipes = [
-        {'x': SCREENWIDTH + 120, 'y': newPipe1[0]['y']},
+        {'x': SCREENWIDTH + 20, 'y': newPipe1[0]['y']},
 #        {'x': SCREENWIDTH + 200 + (SCREENWIDTH / 2), 'y': newPipe2[0]['y']},
     ]
 
     # list of lowerpipe
     lowerPipes = [
-        {'x': SCREENWIDTH + 120, 'y': newPipe1[1]['y']},
+        {'x': SCREENWIDTH + 20, 'y': newPipe1[1]['y']},
 #        {'x': SCREENWIDTH + 200 + (SCREENWIDTH / 2), 'y': newPipe2[1]['y']},
     ]
 
