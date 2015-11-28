@@ -7,25 +7,6 @@ from pygame.locals import *
 from pylab import *
 import random
 
-numRuns = 1
-numEpisodes = 200000
-alpha = 0.05/numTilings
-gamma = 1
-lmbda = 0.9
-epsilon = 0.3
-n = numTiles * 2
-F = [-1]*numTilings 
-zerovec = zeros(n)
-returnAvg = zeros(numEpisodes)
-numSteps = zeros(numEpisodes)  
-w = -0.01*rand(n)
-returnSum = 0.0 
-episodeLen = 0
-A = 0
-G = 0
-S = (300,0,244)
-i = 0
-listOfGfWz = [G,F,w,zerovec]
 
 FPS = 30
 SCREENWIDTH  = 280
@@ -72,7 +53,7 @@ PIPES_LIST = (
 )
 
 
-def start(listOfGfWz):
+def start(G,F,w,zerovec):
     global SCREEN, FPSCLOCK
     pygame.init()
     FPSCLOCK = pygame.time.Clock()
@@ -147,12 +128,12 @@ def start(listOfGfWz):
         )
 
         movementInfo = showWelcomeAnimation()
-        crashInfo = mainGame(movementInfo,listOfGfWz)
+        crashInfo = mainGame(movementInfo,G,F[:],w[:],zerovec[:])
         return crashInfo
         showGameOverScreen(crashInfo)
 
 
-def mainGame(movementInfo,listOfGfWz):
+def mainGame(movementInfo,G,F,w,zerovec):
     score = playerIndex = loopIter = 0
     playerIndexGen = movementInfo['playerIndexGen']
     playerx, playery = int(SCREENWIDTH * 0.2), movementInfo['playery']
@@ -162,7 +143,6 @@ def mainGame(movementInfo,listOfGfWz):
 
     # get 2 new pipes to add to upperPipes lowerPipes list
     newPipe1 = getRandomPipe()
-    newPipe2 = getRandomPipe()
 
     # list of upper pipes
     upperPipes = [
@@ -180,24 +160,14 @@ def mainGame(movementInfo,listOfGfWz):
 
     # player velocity, max velocity, downward accleration, accleration on flap
     playerVelY    =  -9   # player's velocity along Y, default same as playerFlapped
-    playerMaxVelY =  150   # max vel along Y, max descend speed
+    playerMaxVelY =  120   # max vel along Y, max descend speed
     playerMinVelY =  -3   # min vel along Y, max ascend speed
     playerAccY    =   1   # players downward accleration
-    playerFlapAcc =  -3   # players speed on flapping
+    playerFlapAcc =  -4   # players speed on flapping
     playerFlapped = False # True when player flaps
     flap = 1
 
     while True:
-#        for event in pygame.event.get():
-#            if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
-#                pygame.quit()
-#                sys.exit()
-#            if event.type == KEYDOWN and (event.key == K_SPACE or event.key == K_UP):
-#                if playery > -2 * IMAGES['player'][0].get_height():
-#                    playerVelY = playerFlapAcc
-#                    playerFlapped = True
-#                    SOUNDS['wing'].play()
-#                    
         if(flap==1):
             if playery > -2 * IMAGES['player'][0].get_height():
                 playerVelY = playerFlapAcc
@@ -209,7 +179,7 @@ def mainGame(movementInfo,listOfGfWz):
         crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
                                upperPipes, lowerPipes)
         if crashTest[0]:
-            flap = getActionReward(-1,-1,-1,-10000,listOfGfWz)
+            flap = getActionReward(-1,-1,-1,0,G,F[:],w[:],zerovec[:])
             return {
                 'y': playery,
                 'groundCrash': crashTest[1],
@@ -226,7 +196,6 @@ def mainGame(movementInfo,listOfGfWz):
             pipeMidPos = pipe['x'] + IMAGES['pipe'][0].get_width() / 2
             if pipeMidPos <= playerMidPos < pipeMidPos + 4:
                 score += 1
-#                SOUNDS['point'].play()
 
         # playerIndex basex change
         if (loopIter + 1) % 3 == 0:
@@ -273,7 +242,7 @@ def mainGame(movementInfo,listOfGfWz):
         showScore(score)
         SCREEN.blit(IMAGES['player'][playerIndex], (playerx, playery))
 
-        flap = getActionReward(lPipe['x'],lPipe['y'],playery,1,listOfGfWz)
+        flap = getActionReward(lPipe['x'],lPipe['y'],playery,1,G,F[:],w[:],zerovec[:])
         
         pygame.display.update()
         FPSCLOCK.tick(FPS)
@@ -493,7 +462,6 @@ def getHitmask(image):
 def actionTileCode(F,S,A):
     tilecode(S[0],S[1],S[2],F)
     F = [x + A*(numTilings*tiles*tiles*tiles) for x in F]
-    return F
 
 def getExpected(q):
     expectedVal = 0
@@ -508,7 +476,6 @@ def getExpected(q):
 def eligibilityTrace(zerovec,F):
     zerovec = alpha*lmbda*zerovec
     zerovec[F] = 1
-    return zerovec
  
 def Qs(F,S):
     q = zeros(2)
@@ -518,52 +485,61 @@ def Qs(F,S):
     q[1] = sum(w[F])
     return q
     
-def getActionReward(pipeX, pipeY, birdY,reward,listOfGfWz):
-    R = reward
-    listOfGfWz[0] = listOfGfWz[0] + R
-    delta = R - sum(w[listOfGfWz[1]])
+def getActionReward(pipeX, pipeY, birdY,reward,G,F,w,zerovec):
+    R = reward    
+    G[0] = G[0] + R
+    delta = R - sum(w[F])
     q = zeros(2)
             
     if(pipeX != -1):
         for a in range(2):
-            listOfGfWz[1] = actionTileCode(listOfGfWz[1],(pipeX,pipeY,birdY),a)
-            q[a] = sum(w[listOfGfWz[1]])
+            actionTileCode(F[:],(pipeX,pipeY,birdY),a)
+            q[a] = sum(w[F])
+#            print w
     else:
-        w[:] = w[:] + alpha*delta*listOfGfWz[3]
-        print w
+        w = w + alpha*delta*zerovec
         return -1
                     
     expected_q = getExpected(q)
     delta = delta + expected_q
         
-    A = argmax(q) if rand() >= epsilon else random.choice([0,1])
+    A = argmax(q) if rand() >= epsilon else random.choice([0,1])      
+    w = w + alpha*delta*zerovec
             
-    w[:] = w[:] + alpha*delta*listOfGfWz[3]
-            
-    listOfGfWz[1] = actionTileCode(listOfGfWz[1],(pipeX,pipeY,birdY),A)
-    listOfGfWz[3] = eligibilityTrace(listOfGfWz[3],listOfGfWz[1])
-    
-#    print(A)        
+    actionTileCode(F[:],(pipeX,pipeY,birdY),A)
+    eligibilityTrace(zerovec[:],F[:])
+         
     return (A)
     
 
+numEpisodes = 10
+alpha = 0.05/numTilings
+gamma = 1
+lmbda = 0.9
+epsilon = 0.05
+n = numTiles * 2
+F = [-1]*numTilings 
+global zerovec
+zerovec = zeros(n)
+w0 = -0.01*rand(n)
+global w 
+w = w0[:]
+A = 0
+G = [0]
+S = (300,0,244)
+actionTileCode(F,S,A)
+
+i = 0
 
 while(i<numEpisodes):
-    start(listOfGfWz)
-    print (w)
+    start(G,F[:],w[:],zerovec[:])
+    print (G[0])
     zerovec = zeros(n)
     S = (300,0,244)
     A = 0
-    F = actionTileCode(F,S,A)
-    
-#    zerovec[F] = 1
-#    episodeLen = 0
-    listOfGfWz[0] = 0
-    listOfGfWz[1] = F
-    listOfGfWz[3] = zerovec
-#    start(listOfGfWz)
-#    print (listOfGfWz[0])
-#    pygame.quit()
+    actionTileCode(F[:],S,A)
+    eligibilityTrace(zerovec[:],F[:])
+    G[0] = 0
     i = i+1
      
 # Learning Starter for the eligibility trace combined continuous state Sarsa learner    
